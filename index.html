@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>오늘의 날씨 | Weather Now</title>
+  <meta name="description" content="실시간 날씨 API를 연동하여 확인하는 오늘의 날씨 웹 애플리케이션입니다.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --card-bg: rgba(255, 255, 255, 0.06);
+      --card-border: rgba(255, 255, 255, 0.12);
+      --card-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-cyan: #22d3ee;
+      --accent-warm: #fbbf24;
+      --radius-lg: 28px;
+      --radius-md: 18px;
+      --radius-sm: 12px;
+      --transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Dynamic Ambient Background Glows */
+    .ambient-glow {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(100px);
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.5;
+      animation: floatGlow 12s ease-in-out infinite alternate;
+    }
+
+    .glow-1 {
+      width: 420px;
+      height: 420px;
+      top: 10%;
+      left: 15%;
+      background: radial-gradient(circle, #2563eb, transparent 70%);
+    }
+
+    .glow-2 {
+      width: 480px;
+      height: 480px;
+      bottom: 10%;
+      right: 15%;
+      background: radial-gradient(circle, #7c3aed, transparent 70%);
+      animation-delay: -6s;
+    }
+
+    @keyframes floatGlow {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(40px, -30px) scale(1.15); }
+    }
+
+    /* Container */
+    .app-container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* City Quick Selector */
+    .city-nav {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .city-nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    .city-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-sub);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: var(--transition);
+      backdrop-filter: blur(8px);
+    }
+
+    .city-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .city-btn.active {
+      background: linear-gradient(135deg, #38bdf8, #2563eb);
+      border-color: rgba(56, 189, 248, 0.5);
+      color: #ffffff;
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
+      font-weight: 600;
+    }
+
+    /* Main Weather Card */
+    .weather-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 32px 28px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      position: relative;
+      overflow: hidden;
+      transition: var(--transition);
+    }
+
+    .weather-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    }
+
+    /* Card Header */
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .location-info h1 {
+      font-size: 1.85rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .location-info p {
+      color: var(--text-sub);
+      font-size: 0.92rem;
+      margin-top: 4px;
+      font-weight: 400;
+    }
+
+    .refresh-btn {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .refresh-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: rotate(90deg);
+    }
+
+    .refresh-btn.spinning svg {
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Hero Section (Temp & Icon) */
+    .weather-hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+    }
+
+    .temp-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .temp-display {
+      font-size: 5rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      background: linear-gradient(180deg, #ffffff 40%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+    }
+
+    .temp-unit {
+      font-size: 2.5rem;
+      font-weight: 400;
+      margin-top: 6px;
+      -webkit-text-fill-color: var(--accent-cyan);
+    }
+
+    .weather-desc-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: var(--accent-blue);
+      font-size: 0.95rem;
+      font-weight: 600;
+      width: fit-content;
+    }
+
+    .temp-range {
+      font-size: 0.88rem;
+      color: var(--text-sub);
+      margin-top: 8px;
+    }
+
+    .temp-range span {
+      color: #e2e8f0;
+      font-weight: 500;
+    }
+
+    .weather-icon-wrap {
+      width: 110px;
+      height: 110px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4.8rem;
+      filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.4));
+      animation: floatIcon 4s ease-in-out infinite;
+    }
+
+    @keyframes floatIcon {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    /* Grid Metrics */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .metric-card {
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      transition: var(--transition);
+    }
+
+    .metric-card:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.12);
+      transform: translateY(-2px);
+    }
+
+    .metric-icon-box {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+    }
+
+    .metric-icon-box.wind { background: rgba(56, 189, 248, 0.12); color: #38bdf8; }
+    .metric-icon-box.humidity { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+    .metric-icon-box.apparent { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .metric-icon-box.rain { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+
+    .metric-details {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .metric-label {
+      font-size: 0.78rem;
+      color: var(--text-sub);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .metric-value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-top: 2px;
+    }
+
+    /* Footer Notice */
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #64748b;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .footer-api {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+    }
+
+    /* Error Banner */
+    .error-banner {
+      display: none;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    /* Loading Skeleton Animation */
+    .loading .shimmer {
+      position: relative;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+    }
+
+    .loading .shimmer::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      transform: translateX(-100%);
+      background-image: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0,
+        rgba(255, 255, 255, 0.08) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+      100% { transform: translateX(100%); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Glow Effects -->
+  <div class="ambient-glow glow-1" id="glow1"></div>
+  <div class="ambient-glow glow-2" id="glow2"></div>
+
+  <main class="app-container">
+    <!-- City Selection Chips -->
+    <nav class="city-nav" id="cityNav" aria-label="도시 선택">
+      <button class="city-btn active" data-city="서울" data-lat="37.5665" data-lon="126.9780">서울</button>
+      <button class="city-btn" data-city="부산" data-lat="35.1796" data-lon="129.0756">부산</button>
+      <button class="city-btn" data-city="제주" data-lat="33.4996" data-lon="126.5312">제주</button>
+      <button class="city-btn" data-city="대구" data-lat="35.8714" data-lon="128.6014">대구</button>
+      <button class="city-btn" data-city="대전" data-lat="36.3504" data-lon="127.3845">대전</button>
+      <button class="city-btn" data-city="인천" data-lat="37.4563" data-lon="126.7052">인천</button>
+      <button class="city-btn" id="geoBtn">📍 내 위치</button>
+    </nav>
+
+    <!-- Error message display -->
+    <div class="error-banner" id="errorBanner"></div>
+
+    <!-- Weather Card -->
+    <section class="weather-card" id="weatherCard">
+      <!-- Card Header -->
+      <div class="card-header">
+        <div class="location-info">
+          <h1 id="cityName">서울</h1>
+          <p id="currentDate">날짜 로딩 중...</p>
+        </div>
+        <button class="refresh-btn" id="refreshBtn" title="날씨 새로고침" aria-label="새로고침">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Temperature & Condition -->
+      <div class="weather-hero">
+        <div class="temp-group">
+          <div class="temp-display">
+            <span id="currentTemp">--</span>
+            <span class="temp-unit">°</span>
+          </div>
+          <div class="weather-desc-badge" id="weatherDescBadge">
+            <span id="weatherDesc">날씨 정보 수신 중</span>
+          </div>
+          <div class="temp-range" id="tempRange">
+            최고 <span id="maxTemp">--°</span> · 최저 <span id="minTemp">--°</span>
+          </div>
+        </div>
+
+        <div class="weather-icon-wrap" id="weatherIcon">
+          🌤️
+        </div>
+      </div>
+
+      <!-- Sub Metrics (Grid) -->
+      <div class="metrics-grid">
+        <!-- 체감 온도 -->
+        <div class="metric-card">
+          <div class="metric-icon-box apparent">🌡️</div>
+          <div class="metric-details">
+            <span class="metric-label">체감 온도</span>
+            <span class="metric-value" id="apparentTemp">--°C</span>
+          </div>
+        </div>
+
+        <!-- 습도 -->
+        <div class="metric-card">
+          <div class="metric-icon-box humidity">💧</div>
+          <div class="metric-details">
+            <span class="metric-label">습도</span>
+            <span class="metric-value" id="humidity">--%</span>
+          </div>
+        </div>
+
+        <!-- 풍속 -->
+        <div class="metric-card">
+          <div class="metric-icon-box wind">💨</div>
+          <div class="metric-details">
+            <span class="metric-label">풍속</span>
+            <span class="metric-value" id="windSpeed">-- m/s</span>
+          </div>
+        </div>
+
+        <!-- 강수량 -->
+        <div class="metric-card">
+          <div class="metric-icon-box rain">🌧️</div>
+          <div class="metric-details">
+            <span class="metric-label">강수량</span>
+            <span class="metric-value" id="precipitation">-- mm</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Footer -->
+      <div class="card-footer">
+        <div class="footer-api">
+          <span class="status-dot"></span>
+          <span>Open-Meteo API 연동</span>
+        </div>
+        <span id="lastUpdated">업데이트: --:--:--</span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // WMO Weather interpretation codes mapping
+    const weatherCodes = {
+      0: { desc: '맑음', icon: '☀️', glow: ['#f59e0b', '#3b82f6'] },
+      1: { desc: '대체로 맑음', icon: '🌤️', glow: ['#38bdf8', '#2563eb'] },
+      2: { desc: '구름 조금', icon: '⛅', glow: ['#60a5fa', '#475569'] },
+      3: { desc: '흐림', icon: '☁️', glow: ['#64748b', '#334155'] },
+      45: { desc: '안개', icon: '🌫️', glow: ['#94a3b8', '#475569'] },
+      48: { desc: '상에 낀 안개', icon: '🌫️', glow: ['#94a3b8', '#475569'] },
+      51: { desc: '약한 이슬비', icon: '🌦️', glow: ['#0284c7', '#1e293b'] },
+      53: { desc: '이슬비', icon: '🌦️', glow: ['#0284c7', '#1e293b'] },
+      55: { desc: '강한 이슬비', icon: '🌧️', glow: ['#0369a1', '#0f172a'] },
+      61: { desc: '약한 비', icon: '🌧️', glow: ['#0284c7', '#0f172a'] },
+      63: { desc: '보통 비', icon: '🌧️', glow: ['#0369a1', '#0f172a'] },
+      65: { desc: '강한 비', icon: '🌧️', glow: ['#1d4ed8', '#090d16'] },
+      71: { desc: '약한 눈', icon: '🌨️', glow: ['#93c5fd', '#3b82f6'] },
+      73: { desc: '보통 눈', icon: '❄️', glow: ['#bfdbfe', '#2563eb'] },
+      75: { desc: '강한 눈', icon: '❄️', glow: ['#e0f2fe', '#1d4ed8'] },
+      77: { desc: '싸락눈', icon: '🌨️', glow: ['#bfdbfe', '#334155'] },
+      80: { desc: '약한 소나기', icon: '🌦️', glow: ['#0284c7', '#1e293b'] },
+      81: { desc: '소나기', icon: '🌧️', glow: ['#0369a1', '#0f172a'] },
+      82: { desc: '강한 소나기', icon: '⛈️', glow: ['#1e1b4b', '#0f172a'] },
+      85: { desc: '약한 눈보라', icon: '🌨️', glow: ['#93c5fd', '#1e293b'] },
+      86: { desc: '강한 눈보라', icon: '❄️', glow: ['#e0f2fe', '#0f172a'] },
+      95: { desc: '뇌우', icon: '⛈️', glow: ['#7c3aed', '#090d16'] },
+      96: { desc: '우박 동반 뇌우', icon: '⛈️', glow: ['#6d28d9', '#090d16'] },
+      99: { desc: '강한 우박 뇌우', icon: '⛈️', glow: ['#581c87', '#090d16'] }
+    };
+
+    // State
+    let currentCoords = { lat: 37.5665, lon: 126.9780, name: '서울' };
+
+    // DOM Elements
+    const cityNameEl = document.getElementById('cityName');
+    const currentDateEl = document.getElementById('currentDate');
+    const currentTempEl = document.getElementById('currentTemp');
+    const weatherDescEl = document.getElementById('weatherDesc');
+    const weatherIconEl = document.getElementById('weatherIcon');
+    const maxTempEl = document.getElementById('maxTemp');
+    const minTempEl = document.getElementById('minTemp');
+    const apparentTempEl = document.getElementById('apparentTemp');
+    const humidityEl = document.getElementById('humidity');
+    const windSpeedEl = document.getElementById('windSpeed');
+    const precipitationEl = document.getElementById('precipitation');
+    const lastUpdatedEl = document.getElementById('lastUpdated');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const cityButtons = document.querySelectorAll('.city-btn:not(#geoBtn)');
+    const geoBtn = document.getElementById('geoBtn');
+    const errorBanner = document.getElementById('errorBanner');
+    const glow1 = document.getElementById('glow1');
+    const glow2 = document.getElementById('glow2');
+
+    // Format current date in Korean
+    function updateDateDisplay() {
+      const now = new Date();
+      const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+      currentDateEl.textContent = now.toLocaleDateString('ko-KR', options);
+    }
+
+    // Fetch weather data from Open-Meteo
+    async function fetchWeather(lat, lon, cityName) {
+      refreshBtn.classList.add('spinning');
+      errorBanner.style.display = 'none';
+
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error('날씨 데이터를 가져오는데 실패했습니다.');
+        }
+
+        const data = await response.json();
+        renderWeather(data, cityName);
+      } catch (err) {
+        console.error(err);
+        showError('날씨 정보를 불러올 수 없습니다. 네트워크 연결을 확인해주세요.');
+      } finally {
+        refreshBtn.classList.remove('spinning');
+      }
+    }
+
+    // Render weather data
+    function renderWeather(data, cityName) {
+      const current = data.current;
+      const daily = data.daily;
+
+      cityNameEl.textContent = cityName;
+      currentTempEl.textContent = Math.round(current.temperature_2m);
+      apparentTempEl.textContent = `${Math.round(current.apparent_temperature)}°C`;
+      humidityEl.textContent = `${current.relative_humidity_2m}%`;
+      windSpeedEl.textContent = `${(current.wind_speed_10m / 3.6).toFixed(1)} m/s`; // km/h to m/s
+      precipitationEl.textContent = `${current.precipitation} mm`;
+
+      if (daily && daily.temperature_2m_max && daily.temperature_2m_max.length > 0) {
+        maxTempEl.textContent = `${Math.round(daily.temperature_2m_max[0])}°`;
+        minTempEl.textContent = `${Math.round(daily.temperature_2m_min[0])}°`;
+      }
+
+      // Weather condition info
+      const code = current.weather_code;
+      const weatherInfo = weatherCodes[code] || { desc: '맑음', icon: '☀️', glow: ['#38bdf8', '#2563eb'] };
+      
+      // Night check
+      let icon = weatherInfo.icon;
+      if (current.is_day === 0 && (code === 0 || code === 1)) {
+        icon = '🌙';
+      }
+
+      weatherDescEl.textContent = weatherInfo.desc;
+      weatherIconEl.textContent = icon;
+
+      // Update ambient glow colors smoothly
+      if (weatherInfo.glow) {
+        glow1.style.background = `radial-gradient(circle, ${weatherInfo.glow[0]}, transparent 70%)`;
+        glow2.style.background = `radial-gradient(circle, ${weatherInfo.glow[1]}, transparent 70%)`;
+      }
+
+      // Updated time
+      const now = new Date();
+      lastUpdatedEl.textContent = `업데이트: ${now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    }
+
+    function showError(message) {
+      errorBanner.textContent = message;
+      errorBanner.style.display = 'block';
+    }
+
+    // City Button Handlers
+    cityButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        cityButtons.forEach(b => b.classList.remove('active'));
+        geoBtn.classList.remove('active');
+        btn.classList.add('active');
+
+        const lat = parseFloat(btn.dataset.lat);
+        const lon = parseFloat(btn.dataset.lon);
+        const name = btn.dataset.city;
+
+        currentCoords = { lat, lon, name };
+        fetchWeather(lat, lon, name);
+      });
+    });
+
+    // Geolocation Handler
+    geoBtn.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        showError('이 브라우저는 위치 정보 서비스를 지원하지 않습니다.');
+        return;
+      }
+
+      geoBtn.textContent = '📍 위치 찾는 중...';
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          cityButtons.forEach(b => b.classList.remove('active'));
+          geoBtn.classList.add('active');
+          geoBtn.textContent = '📍 내 위치';
+
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          currentCoords = { lat, lon, name: '현재 내 위치' };
+          fetchWeather(lat, lon, '현재 내 위치');
+        },
+        (error) => {
+          geoBtn.textContent = '📍 내 위치';
+          showError('위치 권한이 허용되지 않았거나 위치를 확인할 수 없습니다.');
+        },
+        { timeout: 8000 }
+      );
+    });
+
+    // Refresh Button Handler
+    refreshBtn.addEventListener('click', () => {
+      fetchWeather(currentCoords.lat, currentCoords.lon, currentCoords.name);
+    });
+
+    // Initialize
+    updateDateDisplay();
+    fetchWeather(currentCoords.lat, currentCoords.lon, currentCoords.name);
+  </script>
+</body>
+</html>
